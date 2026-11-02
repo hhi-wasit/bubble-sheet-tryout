@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scan answer sheets</title>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0b5cad">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f7f9;--fg:#15202b;--mut:#5b6773;--card:#fff;--line:#d5dae0;--acc:#0b5cad;--af:#fff;--bad:#c62828}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12171d;--fg:#e8edf2;--mut:#9aa7b4;--card:#1b222a;--line:#2f3a45;--acc:#5aa6f0;--af:#0a1620;--bad:#ff7b72;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12171d;--fg:#e8edf2;--mut:#9aa7b4;--card:#1b222a;--line:#2f3a45;--acc:#5aa6f0;--af:#0a1620;--bad:#ff7b72;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:16px}
+.nav{display:flex;gap:18px;margin:0 0 12px}.nav a{color:var(--acc);font-weight:600}
+h1{font-size:1.4rem;margin:0 0 8px}h2{font-size:1.1rem;margin:20px 0 8px}
+.mut{color:var(--mut)}.bad{color:var(--bad)}
+input,select,button,.btn{font:inherit;min-height:44px;border-radius:8px;border:1px solid var(--line);padding:8px 12px;background:var(--card);color:var(--fg)}
+button,.btn{display:inline-flex;align-items:center;justify-content:center;font-weight:600;background:var(--acc);color:var(--af);border:0;margin:4px 6px 4px 0}
+button:disabled{opacity:.4}
+:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+details,section,.row{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin:10px 0}
+.row{padding:8px 12px;margin:6px 0;display:flex;flex-wrap:wrap;gap:6px;align-items:center;justify-content:space-between}
+label{display:flex;flex-direction:column;gap:4px;margin:8px 0;font-size:.9rem;color:var(--mut)}
+label input{width:100%}
+canvas{width:100%;height:auto;border-radius:8px;display:block}
+.bt button{min-height:40px;padding:4px 12px;margin:2px;background:transparent;color:var(--fg);border:1px solid var(--line)}
+.bt button.on{background:var(--acc);color:var(--af);border-color:var(--acc)}
+</style>
+</head>
+<body>
+<main>
+<nav class="nav"><a href="./">Home</a><a href="sheet-generator.html">Sheets</a><a href="scanner.html">Scan</a></nav>
+<h1>Scan answer sheets</h1>
+<p id="msg" class="mut" role="status">Enter the answer keys, then scan a sheet.</p>
+<details><summary>Answer keys and marking</summary>
+<div id="keys"></div>
+<label>Marks per correct answer<input id="mk" type="number" step="any" value="1"></label>
+<label>Penalty per wrong answer<input id="pn" type="number" step="any" value="0"></label>
+</details>
+<label class="btn">Take photo<input id="cam" type="file" accept="image/*" capture="environment" hidden></label>
+<label class="btn">Choose photo<input id="pic" type="file" accept="image/*" hidden></label>
+<section id="rev" hidden>
+<p id="info" class="mut"></p>
+<canvas id="cv"></canvas>
+<label>Student ID (replace each ? with the right digit)<input id="sid" inputmode="numeric" autocomplete="off"></label>
+<label id="vl">Exam version<select id="ver"></select></label>
+<div id="flags"></div>
+<p id="sc"></p>
+<button id="save" type="button">Save result</button>
+</section>
+<h2>Saved results (<span id="cnt">0</span>)</h2>
+<div id="list"></div>
+<button id="csv" type="button">Download CSV</button><button id="cp" type="button">Copy CSV</button>
+</main>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)},L='ABCDE',S=null,HI=.35,LO=.15;
+var T={blank:'No mark found',multiple:'More than one mark',unclear:'Mark unclear'};
+function get(k){try{return JSON.parse(localStorage.getItem(k)||'null')}catch(e){return null}}
+function put(k,v){try{localStorage.setItem(k,JSON.stringify(v));return true}catch(e){return false}}
+function msg(t,b){$('msg').textContent=t;$('msg').className=b?'bad':'mut'}
+function fail(t){$('rev').hidden=true;S=null;msg(t,1)}
+function num(i,d){var v=parseFloat($(i).value);return isNaN(v)?d:v}
+function cfg(){var k=[];for(var i=0;i<4;i++)k.push($('k'+i).value);return{k:k,m:num('mk',1),p:num('pn',0)}}
+function lab(q,k){return q.t==1?'TF'[k]:L[k]}
+function toks(s){s=(s||'').toUpperCase().trim();var a=/[\s,;]/.test(s)?s.split(/[\s,;]+/):s.replace(/[^A-FT]/g,'').split('');return a.filter(Boolean).map(function(t){return t.replace(/[^A-FT]/g,'').split('').sort().join('')})}
+function med(a){a=a.slice().sort(function(x,y){return x-y});return a[a.length>>1]}
+function best(a,f){return a.reduce(function(p,c){return f(c)<f(p)?c:p})}
+function bin(g,w,h){var W=w+1,I=new Int32Array(W*(h+1)),x,y,r;
+for(y=0;y<h;y++){r=0;for(x=0;x<w;x++){r+=g[y*w+x];I[(y+1)*W+x+1]=I[y*W+x+1]+r}}
+var s=Math.max(15,w>>4),b=new Uint8Array(w*h);
+for(y=0;y<h;y++){var y0=Math.max(0,y-s),y1=Math.min(h,y+s+1);for(x=0;x<w;x++){var x0=Math.max(0,x-s),x1=Math.min(w,x+s+1);
+var m=(I[y1*W+x1]-I[y0*W+x1]-I[y1*W+x0]+I[y0*W+x0])/((x1-x0)*(y1-y0));b[y*w+x]=g[y*w+x]<m*.75?1:0}}return b}
+function blobs(b,w,h){var seen=new Uint8Array(w*h),out=[],st=[];
+for(var i=0;i<w*h;i++){if(!b[i]||seen[i])continue;var n=0,sx=0,sy=0,x0=w,x1=0,y0=h,y1=0;st.length=0;st.push(i);seen[i]=1;
+while(st.length){var p=st.pop(),x=p%w,y=(p-x)/w;n++;sx+=x;sy+=y;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;
+if(x>0&&b[p-1]&&!seen[p-1]){seen[p-1]=1;st.push(p-1)}if(x<w-1&&b[p+1]&&!seen[p+1]){seen[p+1]=1;st.push(p+1)}
+if(y>0&&b[p-w]&&!seen[p-w]){seen[p-w]=1;st.push(p-w)}if(y<h-1&&b[p+w]&&!seen[p+w]){seen[p+w]=1;st.push(p+w)}}
+out.push({n:n,x:sx/n,y:sy/n,bw:x1-x0+1,bh:y1-y0+1})}return out}
+function homog(s,d){var A=[],i,j,k;for(i=0;i<4;i++){var u=s[i][0],v=s[i][1],x=d[i].x,y=d[i].y;A.push([u,v,1,0,0,0,-u*x,-v*x,x],[0,0,0,u,v,1,-u*y,-v*y,y])}
+for(i=0;i<8;i++){var m=i;for(j=i+1;j<8;j++)if(Math.abs(A[j][i])>Math.abs(A[m][i]))m=j;var t=A[i];A[i]=A[m];A[m]=t;
+for(j=0;j<8;j++){if(j==i)continue;var f=A[j][i]/A[i][i];for(k=i;k<9;k++)A[j][k]-=f*A[i][k]}}
+return A.map(function(r,i){return r[8]/r[i]})}
+function mp(H,u,v){var z=H[6]*u+H[7]*v+1;return[(H[0]*u+H[1]*v+H[2])/z,(H[3]*u+H[4]*v+H[5])/z]}
+function mean(H,u,v,r){var s=0,n=0;for(var a=-2;a<=2;a++)for(var b=-2;b<=2;b++){var du=a*r/2,dv=b*r/2;if(du*du+dv*dv>r*r)continue;
+var p=mp(H,u+du,v+dv),x=Math.round(p[0]),y=Math.round(p[1]);if(x<0||y<0||x>=S.w||y>=S.h)return NaN;s+=S.g[y*S.w+x];n++}return s/n}
+function code(H){var m=[],i;for(i=0;i<40;i++)m.push(mean(H,23.5+i*4,283.5,.9));
+var lo=Math.min.apply(0,m),hi=Math.max.apply(0,m);if(!(hi-lo>40))return null;
+var b=m.map(function(v){return v<(lo+hi)/2?1:0});
+if(!b[0]||b.reduce(function(a,x){return a+x},0)%2)return null;
+function n(a,z){var v=0;for(var i=a;i<z;i++)v=v*2+b[i];return v}
+var B=[],N=0,D=n(34,38);for(var j=0;j<3;j++){var o=1+j*11,t=n(o,o+2),k=n(o+2,o+9);if(k){B.push({t:t,n:k,c:n(o+9,o+11)+2});N+=k}}
+if(N<1||N>100||D>10)return null;return{B:B,N:N,D:D,V:b[38]}}
+function cls(sc,mu){var F=[],A=0;sc.forEach(function(v,k){if(v>=HI)F.push(k);else if(v>=LO)A=1});
+return{sel:F,flag:A?'unclear':F.length>1&&!mu?'multiple':F.length?'':'blank'}}
+function load(f){if(!f)return;var im=new Image();im.onload=function(){process(im);URL.revokeObjectURL(im.src)};
+im.onerror=function(){fail('Could not open that image.')};im.src=URL.createObjectURL(f)}
+function process(im){
+var sc=Math.min(1,1800/Math.max(im.width,im.height)),w=Math.round(im.width*sc),h=Math.round(im.height*sc),cv=$('cv');
+cv.width=w;cv.height=h;var x=cv.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,w,h);
+var id=x.getImageData(0,0,w,h),d=id.data,g=new Uint8Array(w*h),i;
+for(i=0;i<g.length;i++)g[i]=(d[i*4]*77+d[i*4+1]*150+d[i*4+2]*29)>>8;
+S={w:w,h:h,g:g,id:id};
+var bl=blobs(bin(g,w,h),w,h).filter(function(b){var r=b.bw/b.bh;return b.n>=60&&b.n<w*h*.01&&r>.7&&r<1.4&&b.n/(b.bw*b.bh)>.8}).sort(function(a,b){return b.n-a.n}).slice(0,4);
+if(bl.length<4||bl[3].n<bl[0].n*.5)return fail('Could not find all 4 corner markers. Keep the whole sheet in view, flat and evenly lit.');
+var cor=[best(bl,function(p){return p.x+p.y}),best(bl,function(p){return p.y-p.x}),best(bl,function(p){return -p.x-p.y}),best(bl,function(p){return p.x-p.y})];
+if(cor.some(function(c,i){return cor.indexOf(c)!==i}))return fail('Corner markers were not found cleanly. Retake the photo straight-on.');
+var SP=[[12,12],[198,12],[198,285],[12,285]],H,c=null;
+for(var s=0;s<4&&!c;s++){H=homog(SP.map(function(_,i){return SP[(i+s)%4]}),cor);c=code(H)}
+if(!c)return fail('Found the markers but could not read the sheet code. Check focus and lighting.');
+var N=c.N,D=c.D,q=[],gb=[],gn=[],j,k,qs=[];c.B.forEach(function(b){for(var n=0;n<b.n;n++)qs.push({t:b.t,c:b.t==1?2:b.c})});
+for(i=0;i<N;i++){var col=i/25|0,r=i%25,m=[];for(k=0;k<qs[i].c;k++){var v=mean(H,14+col*46.5+11+k*7,103.5+r*7,1.5);if(isNaN(v))return fail('The sheet is partly outside the photo.');m.push(v);(Math.floor(r/5)%2?gn:gb).push(v)}q.push({m:m,band:!(Math.floor(r/5)%2),t:qs[i].t,c:qs[i].c})}
+var bB=med(gb.length?gb:gn),bN=med(gn.length?gn:gb),ids='';
+q.forEach(function(o){o.sc=o.m.map(function(v){return 1-v/(o.band?bB:bN)});var z=cls(o.sc,o.t==2);o.sel=z.sel;o.flag=o.o=z.flag});
+for(i=0;i<D;i++){var s2=[];for(j=0;j<10;j++)s2.push(1-mean(H,20+i*5.5+2.3,51+j*4.5,1.3)/bN);var z=cls(s2);ids+=z.sel.length==1&&!z.flag?z.sel[0]:'?'}
+var vs=[];for(k=0;k<4;k++)vs.push(1-mean(H,108+k*10,48,1.8)/bN);var zv=cls(vs);
+S.H=H;S.cor=cor;S.N=N;S.D=D;S.V=c.V;S.q=q;S.dup=false;
+$('info').textContent='Sheet: '+N+' questions'+(D?', '+D+'-digit ID':'')+(c.V?', versions':'')+'.';
+$('sid').value=ids;$('sid').hidden=!D;$('sid').parentNode.hidden=!D;
+$('vl').hidden=!c.V;$('ver').innerHTML='<option value="">Choose</option><option>A</option><option>B</option><option>C</option><option>D</option>';
+$('ver').selectedIndex=c.V&&zv.sel.length==1&&!zv.flag?zv.sel[0]+1:0;
+$('rev').hidden=false;msg('Check the highlighted marks, fix anything wrong, then save.');draw();render();$('rev').scrollIntoView()}
+function draw(){var x=$('cv').getContext('2d'),lw=Math.max(2,S.w/400);x.putImageData(S.id,0,0);x.lineWidth=lw;
+x.strokeStyle='#00bcd4';S.cor.forEach(function(p){x.strokeRect(p.x-12,p.y-12,24,24)});
+S.q.forEach(function(q,i){var col=i/25|0,r=i%25;q.m.forEach(function(_,k){var on=q.sel.indexOf(k)>=0,am=q.flag&&q.sc[k]>=LO;if(!on&&!am)return;
+var u=14+col*46.5+11+k*7,v=103.5+r*7,a=mp(S.H,u,v),b=mp(S.H,u+2.25,v);x.strokeStyle=q.flag?'#f59e0b':'#22c55e';
+x.beginPath();x.arc(a[0],a[1],Math.hypot(a[0]-b[0],a[1]-b[1])+lw,0,7);x.stroke()})})}
+function state(){var c=cfg(),vi=S.V?parseInt(['A','B','C','D'].indexOf($('ver').value),10):0,m=[],bl=0,blank=0;
+S.q.forEach(function(q){if(q.flag==='unclear'||q.flag==='multiple')bl++;if(!q.sel.length)blank++});
+if(bl)m.push(bl+' question(s) need a decision.');
+if(S.D&&!new RegExp('^\\d{'+S.D+'}$').test($('sid').value.trim()))m.push('Student ID must be '+S.D+' digits.');
+if(S.V&&vi<0)m.push('Choose the exam version.');
+S.vi=vi;S.t=null;
+if(vi>=0){var key=toks(c.k[vi]);
+if(key.length!==S.N)m.push('Key for version '+L[vi]+' has '+key.length+' answers but the sheet has '+S.N+'. Fix it under Answer keys.');
+else{var t=0;S.q.forEach(function(q,i){if(q.sel.length)t+=q.sel.map(function(k){return lab(q,k)}).sort().join('')===key[i]?c.m:-c.p});S.t=Math.round(t*100)/100;S.max=Math.round(S.N*c.m*100)/100}}
+$('sc').className=m.length?'bad':'';$('sc').textContent=m.length?m.join(' '):'Score: '+S.t+' / '+S.max+' ('+blank+' blank)';
+$('save').disabled=!!m.length}
+function render(){var h='';S.q.forEach(function(q,i){if(!q.o)return;var cur=q.sel.length?q.sel.map(function(k){return lab(q,k)}).join(''):'blank';
+h+='<div class="row"><span><b>Q'+(i+1)+'</b> <span class="'+(q.flag==='unclear'||q.flag==='multiple'?'bad':'mut')+'">'+(q.flag?T[q.o]:'set to '+cur)+'</span></span><span class="bt">';
+for(var k=0;k<q.c;k++)h+='<button type="button" data-q="'+i+'" data-k="'+k+'"'+(!q.flag&&q.sel.indexOf(k)>=0?' class="on"':'')+'>'+lab(q,k)+'</button>';
+h+='<button type="button" data-q="'+i+'" data-k="-1"'+(!q.flag&&!q.sel.length?' class="on"':'')+'>Blank</button></span></div>'});
+$('flags').innerHTML=h||'<p class="mut">All marks were read clearly.</p>';state()}
+function list(){var R=get('omr.res')||[];$('cnt').textContent=R.length;
+$('list').innerHTML=R.map(function(r,i){return'<div class="row"><span>'+(r.id||'—')+(r.ver?' · '+r.ver:'')+' · <b>'+r.score+'/'+r.max+'</b></span><button type="button" data-del="'+i+'">Delete</button></div>'}).join('')}
+function csv(){return'id,version,score,max,answers\n'+(get('omr.res')||[]).map(function(r){return[r.id,r.ver,r.score,r.max,r.ans].join(',')}).join('\n')}
+$('cam').addEventListener('change',function(e){load(e.target.files[0]);e.target.value=''});
+$('pic').addEventListener('change',function(e){load(e.target.files[0]);e.target.value=''});
+$('flags').addEventListener('click',function(e){var b=e.target.closest('button');if(!b||!S)return;var q=S.q[b.dataset.q],k=+b.dataset.k;q.sel=k<0?[]:q.t==2?(q.sel.indexOf(k)<0?q.sel.concat(k):q.sel.filter(function(x){return x!==k})):[k];q.flag='';draw();render()});
+$('sid').addEventListener('input',function(){if(S){S.dup=false;state()}});
+$('ver').addEventListener('change',function(){if(S)state()});
+$('save').addEventListener('click',function(){if(!S||$('save').disabled)return;state();if($('save').disabled)return;
+var rec={id:S.D?$('sid').value.trim():'',ver:S.V?L[S.vi]:'',score:S.t,max:S.max,ans:S.q.map(function(q){return q.sel.length?q.sel.map(function(k){return lab(q,k)}).join(''):'-'}).join(' ')};
+var R=get('omr.res')||[],j=-1;if(rec.id)R.forEach(function(r,i){if(r.id===rec.id)j=i});
+if(j>=0&&!S.dup){S.dup=true;msg('ID '+rec.id+' is already saved ('+R[j].score+'/'+R[j].max+'). Tap Save again to replace it, or correct the ID.',1);return}
+if(j>=0)R[j]=rec;else R.push(rec);
+if(!put('omr.res',R))return msg('Could not save: browser storage is unavailable.',1);
+$('rev').hidden=true;S=null;list();msg('Saved'+(rec.id?' ID '+rec.id:'')+'. Scan the next sheet.')});
+$('list').addEventListener('click',function(e){var b=e.target.closest('button');if(!b)return;
+if(!b.dataset.arm){b.dataset.arm=1;b.textContent='Tap to confirm';return}
+var R=get('omr.res')||[];R.splice(+b.dataset.del,1);put('omr.res',R);list()});
+$('csv').addEventListener('click',function(){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv()],{type:'text/csv'}));a.download='results.csv';a.click()});
+$('cp').addEventListener('click',function(){try{navigator.clipboard.writeText(csv()).then(function(){msg('CSV copied.')},function(){msg('Copy was blocked by the browser.',1)})}catch(e){msg('Copy was blocked by the browser.',1)}});
+var kh='',sv=get('omr.cfg')||{k:[],m:1,p:0};
+for(var i=0;i<4;i++)kh+='<label>Key for version '+L[i]+(i?'':' (or the only key)')+'<input id="k'+i+'" autocapitalize="characters" spellcheck="false" placeholder="e.g. ABCD or A BC T F"></label>';
+$('keys').innerHTML=kh;for(i=0;i<4;i++)$('k'+i).value=sv.k[i]||'';$('mk').value=sv.m;$('pn').value=sv.p;
+['k0','k1','k2','k3','mk','pn'].forEach(function(id){$(id).addEventListener('input',function(){put('omr.cfg',cfg());if(S)state()})});
+list();
+})();
+</script>
+<script>if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){})</script>
+</body>
+</html>

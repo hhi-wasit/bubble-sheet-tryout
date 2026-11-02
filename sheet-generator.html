@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Answer sheet generator</title>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0b5cad">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f7f9;--fg:#15202b;--mut:#5b6773;--card:#fff;--line:#d5dae0;--acc:#0b5cad;--accfg:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12171d;--fg:#e8edf2;--mut:#9aa7b4;--card:#1b222a;--line:#2f3a45;--acc:#5aa6f0;--accfg:#0a1620;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12171d;--fg:#e8edf2;--mut:#9aa7b4;--card:#1b222a;--line:#2f3a45;--acc:#5aa6f0;--accfg:#0a1620;color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.45 "Source Sans 3",system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:640px;margin:0 auto;padding:16px}
+h1{font-size:1.4rem;margin:0 0 4px}
+p.sub{color:var(--mut);margin:0 0 16px}
+.ctl{display:grid;grid-template-columns:1fr 1fr;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px}
+.ctl label{display:flex;flex-direction:column;gap:4px;font-size:.9rem;color:var(--mut)}
+.ctl .wide{grid-column:1/-1}
+input,select{font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;min-height:44px}
+input:focus-visible,select:focus-visible,button:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.chk{flex-direction:row!important;align-items:center;gap:10px!important;color:var(--fg)!important}
+.chk input{min-height:0;width:20px;height:20px}
+button{font:inherit;font-weight:600;background:var(--acc);color:var(--accfg);border:0;border-radius:8px;padding:12px 16px;min-height:44px;margin:14px 0}
+.nav{display:flex;gap:18px;margin:0 0 12px}.nav a{color:var(--acc);font-weight:600}
+.bk{display:grid;grid-template-columns:2fr 1fr 1fr;gap:8px}
+.note{font-size:.88rem;color:var(--mut);margin:0 0 14px}
+.sheet{background:#fff;border:1px solid var(--line);overflow-x:auto}
+.sheet svg{display:block;width:100%;height:auto;background:#fff}
+@media print{
+ @page{size:A4;margin:0}
+ body,main{background:#fff;margin:0;padding:0;max-width:none}
+ :root{padding:0}
+ .noprint{display:none!important}
+ .sheet{border:0;overflow:visible}
+ .sheet svg{width:210mm;height:297mm}
+}
+</style>
+</head>
+<body>
+<main>
+<div class="noprint">
+<nav class="nav"><a href="./">Home</a><a href="sheet-generator.html">Sheets</a><a href="scanner.html">Scan</a></nav>
+<h1>Answer sheet generator</h1>
+<p class="sub">A4 bubble sheet with corner markers, student ID grid and sheet code.</p>
+<div class="ctl">
+ <label class="wide">Exam title<input id="title" value="Exam answer sheet" maxlength="48"></label>
+ <div class="wide"><b>Sections</b> <span class="note" id="tot"></span></div>
+<p class="note wide">Type, number of questions, choices. True/False always has 2 choices. In Matching, each item picks one letter from a list printed on your exam paper. Multiple select allows several marks.</p>
+<div class="bk wide"><select id="t0" aria-label="Section 1 type"><option value="-1">None</option><option value="0" selected>Multiple choice</option><option value="1">True / False</option><option value="2">Multiple select</option><option value="3">Matching</option></select><input id="n0" type="number" inputmode="numeric" min="0" max="100" value="100" aria-label="Section 1 questions"><select id="c0" aria-label="Section 1 choices"><option>2</option><option>3</option><option selected>4</option><option>5</option></select></div>
+<div class="bk wide"><select id="t1" aria-label="Section 2 type"><option value="-1">None</option><option value="0">Multiple choice</option><option value="1">True / False</option><option value="2">Multiple select</option><option value="3">Matching</option></select><input id="n1" type="number" inputmode="numeric" min="0" max="100" value="10" aria-label="Section 2 questions"><select id="c1" aria-label="Section 2 choices"><option>2</option><option>3</option><option selected>4</option><option>5</option></select></div>
+<div class="bk wide"><select id="t2" aria-label="Section 3 type"><option value="-1">None</option><option value="0">Multiple choice</option><option value="1">True / False</option><option value="2">Multiple select</option><option value="3">Matching</option></select><input id="n2" type="number" inputmode="numeric" min="0" max="100" value="10" aria-label="Section 3 questions"><select id="c2" aria-label="Section 3 choices"><option>2</option><option>3</option><option selected>4</option><option>5</option></select></div>
+
+ <label>Student ID digits (0–10)<input id="idd" type="number" inputmode="numeric" min="0" max="10" value="8"></label>
+ <label class="chk"><input id="ver" type="checkbox" checked>Exam version (A–D)</label>
+</div>
+<button id="print" type="button">Print or save as PDF</button>
+<p class="note">When printing, choose A4, margins none, and scale 100% (actual size). Do not use “fit to page”, because it changes the bubble positions the scanner expects.</p>
+</div>
+<div class="sheet" id="sheet"></div>
+</main>
+<script>
+(function(){
+var $=function(i){return document.getElementById(i)};
+function clamp(v,a,b,d){v=parseInt(v,10);if(isNaN(v))v=d;return Math.max(a,Math.min(b,v))}
+function bits(v,len){var s=[];for(var i=len-1;i>=0;i--)s.push((v>>i)&1);return s}
+function esc(t){return t.replace(/[&<>]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;'}[c]})}
+function build(){
+ var B=[],N=0,j,qs=[];
+for(j=0;j<3;j++){var t=parseInt($('t'+j).value,10),n=Math.min(clamp($('n'+j).value,0,100,0),100-N);if(t>=0&&n>0){B.push({t:t,n:n,c:t==1?2:clamp($('c'+j).value,2,5,4)});N+=n}}
+B.forEach(function(b){for(var i=0;i<b.n;i++)qs.push(b)});$('tot').textContent=N+' of 100 questions';
+ var D=clamp($('idd').value,0,10,8),V=$('ver').checked?1:0;
+ var title=esc($('title').value||'Answer sheet'),L='ABCDE',o='';
+ var st='fill="none" stroke="#000" stroke-width=".25"';
+ [[8,8],[194,8],[8,281],[194,281]].forEach(function(p){o+='<rect x="'+p[0]+'" y="'+p[1]+'" width="8" height="8" fill="#000"/>'});
+ o+='<text x="105" y="19" text-anchor="middle" font-size="5" font-weight="700">'+title+'</text>';
+ o+='<text x="20" y="29" font-size="3">Name</text><line x1="32" y1="29.5" x2="110" y2="29.5" stroke="#000" stroke-width=".25"/>';
+ o+='<text x="116" y="29" font-size="3">Date</text><line x1="127" y1="29.5" x2="190" y2="29.5" stroke="#000" stroke-width=".25"/>';
+ if(D>0){
+  o+='<text x="20" y="38" font-size="3" font-weight="700">Student ID</text>';
+  for(var i=0;i<D;i++){var x=20+i*5.5;o+='<rect x="'+x+'" y="40" width="4.6" height="5" '+st+'/>';
+   for(var d=0;d<10;d++){var cy=51+d*4.5;o+='<circle cx="'+(x+2.3)+'" cy="'+cy+'" r="1.8" '+st+'/>';if(i==0)o+='<text x="17" y="'+(cy+1)+'" text-anchor="middle" font-size="2.8" fill="#555">'+d+'</text>'}}
+ }
+ if(V){
+  o+='<text x="105" y="38" font-size="3" font-weight="700">Exam version</text>';
+  for(var k=0;k<4;k++){var vx=108+k*10;o+='<text x="'+vx+'" y="44" text-anchor="middle" font-size="3">'+L[k]+'</text><circle cx="'+vx+'" cy="48" r="2.6" '+st+'/>'}
+ }
+ o+='<text x="105" y="62" font-size="2.8">Use a dark pen or pencil. Fill each bubble completely.</text>';
+ o+='<text x="105" y="67" font-size="2.8">To change an answer, erase the old mark fully.</text>';
+ o+='<text x="105" y="72" font-size="2.8">Mark one bubble per question, unless told to mark all that apply.</text>';
+ o+='<text x="105" y="79" font-size="2.8">Right:</text><circle cx="120" cy="78" r="2.25" fill="#000"/>';
+ o+='<text x="128" y="79" font-size="2.8">Wrong:</text><circle cx="144" cy="78" r="2.25" '+st+'/><path d="M142.6 76.6l2.8 2.8M145.4 76.6l-2.8 2.8" stroke="#000" stroke-width=".3"/>';
+ var p=0,NM=['Multiple choice','True/False','Multiple select','Matching'];o+='<text x="14" y="96.5" font-size="2.6" fill="#444">'+B.map(function(b){var s='Q'+(p+1)+'-'+(p+b.n)+' '+NM[b.t];p+=b.n;return s}).join('   |   ')+'</text>';
+ for(var c=0;c<4;c++){
+  var cx0=14+c*46.5;if(c*25>=N)break;
+  for(var r=0;r<25;r++){var q=c*25+r;if(q>=N)break;var cy2=103.5+r*7;
+   if(Math.floor(r/5)%2==0)o+='<rect x="'+cx0+'" y="'+(cy2-3.5)+'" width="43" height="7" fill="#eee"/>';
+   o+='<text x="'+(cx0+7)+'" y="'+(cy2+1)+'" text-anchor="end" font-size="3">'+(q+1)+'</text>';
+   for(var k3=0;k3<qs[q].c;k3++){var bx=cx0+11+k3*7;o+='<circle cx="'+bx+'" cy="'+cy2+'" r="2.25" fill="#fff" stroke="#000" stroke-width=".25"/><text x="'+bx+'" y="'+(cy2+.85)+'" text-anchor="middle" font-size="2.3" fill="#777">'+(qs[q].t==1?'TF'[k3]:L[k3])+'</text>'}}
+ }
+ var b=[1];for(j=0;j<3;j++){var bk=B[j]||{t:0,n:0,c:2};b=b.concat(bits(bk.t,2),bits(bk.n,7),bits(bk.c-2,2))}
+ b=b.concat(bits(D,4),[V]);var par=b.reduce(function(a,x){return a+x},0)%2;b.push(par);
+ b.forEach(function(v,i){o+='<rect x="'+(22+i*4)+'" y="282" width="3" height="3" '+(v?'fill="#000"':'fill="#fff" stroke="#000" stroke-width=".2"')+'/>'});
+ o+='<text x="22" y="280.3" font-size="2.4">SHEET '+N+'Q-'+D+'ID'+(V?'-V':'')+'</text>';
+ $('sheet').innerHTML='<svg viewBox="0 0 210 297" xmlns="http://www.w3.org/2000/svg" font-family="Arial,Helvetica,sans-serif" fill="#000">'+o+'</svg>';
+}
+['title','idd','ver','t0','n0','c0','t1','n1','c1','t2','n2','c2'].forEach(function(i){$(i).addEventListener('input',build);$(i).addEventListener('change',build)});
+$('print').addEventListener('click',function(){window.print()});
+build();
+})();
+</script>
+<script>if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){})</script>
+</body>
+</html>

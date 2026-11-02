@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bubble Grader</title>
+<link rel="manifest" href="manifest.webmanifest"><meta name="theme-color" content="#0b5cad">
+<link rel="icon" href="icon-192.png">
+<style>
+:root{box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#f6f7f9;--fg:#15202b;--mut:#5b6773;--card:#fff;--line:#d5dae0;--acc:#0b5cad;--af:#fff}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#12171d;--fg:#e8edf2;--mut:#9aa7b4;--card:#1b222a;--line:#2f3a45;--acc:#5aa6f0;--af:#0a1620;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#12171d;--fg:#e8edf2;--mut:#9aa7b4;--card:#1b222a;--line:#2f3a45;--acc:#5aa6f0;--af:#0a1620;color-scheme:dark}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:640px;margin:0 auto;padding:20px 16px 32px}
+h1{font-size:1.7rem;margin:8px 0 4px}h2{font-size:1.05rem;margin:24px 0 8px}
+p{margin:0 0 10px}.mut{color:var(--mut)}
+.card{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin:12px 0;color:inherit;text-decoration:none}
+.card b{display:block;font-size:1.1rem;color:var(--acc);margin-bottom:2px}
+.card:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+ol,ul{padding-left:20px;margin:0}li{margin:4px 0}
+</style>
+</head>
+<body>
+<main>
+<h1>Bubble Grader</h1>
+<p class="mut">Print answer sheets, scan them with your phone camera, and grade automatically. No ads, no accounts. Everything stays on your phone.</p>
+<a class="card" href="sheet-generator.html"><b>1. Make answer sheets</b>Choose question types, set the number of questions, then print an A4 sheet.</a>
+<a class="card" href="scanner.html"><b>2. Scan and grade</b>Enter the answer keys, photograph each sheet, check the marks, and save the score.</a>
+<h2>Question types</h2>
+<ul><li>Multiple choice (2 to 5 choices)</li><li>True / False</li><li>Multiple select (several correct answers)</li><li>Matching (each item picks a letter)</li></ul>
+<p class="mut" style="margin-top:8px">Mix up to 3 sections on one sheet, 100 questions in total.</p>
+<h2>For accurate scans</h2>
+<ol><li>Print at 100% scale (actual size), never “fit to page”.</li><li>Fill bubbles completely with a dark pen or pencil.</li><li>Photograph the whole sheet, flat, in even light, with all four black corner squares visible.</li><li>Review every orange mark before saving.</li></ol>
+<h2>Install on your phone</h2>
+<p>In Chrome on Android, open the menu and choose Install app (or Add to Home screen). It then works offline.</p>
+</main>
+<script>if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(function(){})</script>
+</body>
+</html>
